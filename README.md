@@ -17,19 +17,22 @@ Built for apathy, burnout, and humor.
 ## 🚀 API Usage
 
 **Base URL**
+
 ```
-http://localhost:8080/sorry
+(i have not deployed this thing)/sorry
 ```
 
 **Method:** `GET`  
 **Rate Limit:** `1 request per second` (Burst: 3)
 
 ### 🔄 Example Request
+
 ```http
 GET /sorry
 ```
 
 ### ✅ Example Response
+
 ```json
 {
   "reason": "I am profoundly sorry that your expectations and my level of fuck-giving never even briefly coexisted in this universe."
@@ -45,22 +48,26 @@ Use it in slack bots, auto-replies, or wherever you need to professionally disso
 Want to run it yourself? It’s lightweight and simple.
 
 ### 1. Clone this repository
+
 ```bash
 git clone https://github.com/anugrahsputra/zero-fucks-given-as-a-service.git
 cd zero-fucks-given-as-a-service
 ```
 
 ### 2. Install dependencies
+
 ```bash
 go mod tidy
 ```
 
 ### 3. Start the server
+
 ```bash
 go run main.go
 ```
 
 The API will be live at:
+
 ```
 http://localhost:8080/sorry
 ```
@@ -106,3 +113,4 @@ This project is for satirical purposes. If you actually use this to reply to you
 ## 📄 License
 
 MIT — do whatever, just don’t say yes when you should say... well, nothing.
+
