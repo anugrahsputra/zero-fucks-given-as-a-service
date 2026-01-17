@@ -2,12 +2,16 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -96,10 +100,10 @@ func getClientIP(r *http.Request) string {
 
 var apologies []string
 
-func readFile() []string {
+func readFile() ([]string, error) {
 	file, err := os.Open("zero-fucks.json")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer file.Close()
 
@@ -114,10 +118,10 @@ func readFile() []string {
 		}
 	}
 
-	return lines
+	return lines, sc.Err()
 }
 
-func handler(c *gin.Context) {
+func sorryHandler(c *gin.Context) {
 	if len(apologies) == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "empty dataset, just like your life",
@@ -125,22 +129,59 @@ func handler(c *gin.Context) {
 		return
 	}
 
-	i := rand.Intn(len(apologies))
 	c.JSON(http.StatusOK, DontCare{
-		Reason: apologies[i],
+		Reason: apologies[rand.Intn(len(apologies))],
 	})
 }
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	gin.SetMode(gin.ReleaseMode)
 
-	apologies = readFile()
+	var err error
+	apologies, err = readFile()
+	if err != nil {
+		log.Fatal("Failed to load apologies set")
+	}
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	_ = r.SetTrustedProxies([]string{"127.0.0.1"})
 
 	rl := NewRateLimiter(1, 3)
 	r.Use(rl.Middleware())
 
-	r.GET("/sorry", handler)
-	r.Run(":8080")
+	r.GET("/sorry", sorryHandler)
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "OK"})
+	})
+
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
+	go func() {
+		log.Println("server running on :8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("listen error:", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("server forced to shutdown:", err)
+	}
+
+	log.Println("server exited cleanly")
+
 }

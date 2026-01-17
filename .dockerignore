@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# Go
+server
+*.exe
+*.test
+*.out
+vendor/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# OS
+.DS_Store
+
+# Temp
+tmp/
+*.log
