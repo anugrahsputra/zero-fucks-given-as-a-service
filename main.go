@@ -172,8 +172,10 @@ func main() {
 	r.Use(rl.Middleware())
 
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"you are": "GAY"})
+		// CHECK OUT MY OTHER WORK
+		c.Redirect(301, "https://downormal.dev")
 	})
+
 	r.GET("/sorry", sorryHandler)
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "OK"})
