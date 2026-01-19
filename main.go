@@ -152,6 +152,9 @@ func main() {
 	rl := NewRateLimiter(1, 3)
 	r.Use(rl.Middleware())
 
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"you are": "GAY"})
+	})
 	r.GET("/sorry", sorryHandler)
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "OK"})
