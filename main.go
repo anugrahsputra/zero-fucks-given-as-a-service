@@ -106,12 +106,51 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	}
 }
 
-func getClientIP(r *http.Request) string {
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		return strings.Split(ip, ",")[0]
+var trustedProxyNets []*net.IPNet
+
+func isTrustedProxy(ip net.IP) bool {
+	for _, n := range trustedProxyNets {
+		if n.Contains(ip) {
+			return true
+		}
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return ip
+	return false
+}
+
+func getClientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+
+	remoteIP := net.ParseIP(host)
+	if remoteIP == nil {
+		return host
+	}
+
+	if !isTrustedProxy(remoteIP) {
+		return remoteIP.String()
+	}
+
+	if fwd := r.Header.Get("Forwarded"); fwd != "" {
+		for part := range strings.SplitSeq(fwd, ";") {
+			if strings.HasPrefix(strings.ToLower(part), "for=") {
+				ip := strings.Trim(part[4:], `"`)
+				return strings.Split(ip, ":")[0]
+			}
+		}
+	}
+
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		ips := strings.Split(xff, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	if rip := r.Header.Get("X-Real-IP"); rip != "" {
+		return rip
+	}
+
+	return remoteIP.String()
 }
 
 var apologies []string
@@ -154,7 +193,7 @@ func sorryHandler(c *gin.Context) {
 func main() {
 	ConfigureLogger()
 
-	rand.Seed(time.Now().UnixNano())
+	rand.New(rand.NewSource(time.Now().UnixNano()))
 	gin.SetMode(gin.ReleaseMode)
 
 	var err error
@@ -166,18 +205,15 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	_ = r.SetTrustedProxies([]string{"127.0.0.1"})
-
-	rl := NewRateLimiter(1, 3)
-	r.Use(rl.Middleware())
+	rl := NewRateLimiter(3, 6)
 
 	r.GET("/", func(c *gin.Context) {
 		// CHECK OUT MY OTHER WORK
 		c.Redirect(301, "https://downormal.dev")
 	})
 
-	r.GET("/sorry", sorryHandler)
-	r.GET("/health", func(c *gin.Context) {
+	r.GET("/sorry", rl.Middleware(), sorryHandler)
+	r.GET("/health", rl.Middleware(), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "OK"})
 	})
 
