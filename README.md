@@ -19,7 +19,7 @@ Built for apathy, burnout, and humor.
 **Base URL**
 
 ```
-(i have not deployed this thing)/sorry
+https://zfgaas.downormal.dev/sorry
 ```
 
 **Method:** `GET`  
@@ -113,4 +113,3 @@ This project is for satirical purposes. If you actually use this to reply to you
 ## 📄 License
 
 MIT — do whatever, just don’t say yes when you should say... well, nothing.
-
