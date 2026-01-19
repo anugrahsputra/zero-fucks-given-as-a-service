@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -15,8 +14,24 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/op/go-logging"
 	"golang.org/x/time/rate"
 )
+
+var Logger = logging.MustGetLogger("github.com/anugrahsputra/github.com/anugrahsputra/go-rest")
+
+func ConfigureLogger() {
+	format := logging.MustStringFormatter(
+		`%{color}[%{time:2006-01-02 15:04:05}] ▶ %{level}%{color:reset} %{message} ...[%{shortfile}@%{shortfunc}()]`,
+	)
+
+	backend := logging.NewLogBackend(os.Stderr, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, format)
+
+	logging.SetBackend(backendFormatter)
+	Logger.Info("Logger configured successfully")
+}
 
 type DontCare struct {
 	Reason string `json:"reason"`
@@ -79,6 +94,7 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 
 		limiter := rl.getLimiter(key)
 		if !limiter.Allow() {
+			Logger.Warningf("Rate limit exceeded for %s", key)
 			c.Header("Retry-After", "1")
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "Too many requests, so maybe chill the fuck out",
@@ -123,6 +139,7 @@ func readFile() ([]string, error) {
 
 func sorryHandler(c *gin.Context) {
 	if len(apologies) == 0 {
+		Logger.Error("Empty apologies list requested")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "empty dataset, just like your life",
 		})
@@ -135,13 +152,15 @@ func sorryHandler(c *gin.Context) {
 }
 
 func main() {
+	ConfigureLogger()
+
 	rand.Seed(time.Now().UnixNano())
 	gin.SetMode(gin.ReleaseMode)
 
 	var err error
 	apologies, err = readFile()
 	if err != nil {
-		log.Fatal("Failed to load apologies set")
+		Logger.Errorf("Failed to load apologies set")
 	}
 
 	r := gin.New()
@@ -166,9 +185,9 @@ func main() {
 	}
 
 	go func() {
-		log.Println("server running on :8080")
+		Logger.Infof("server running on :8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("listen error:", err)
+			Logger.Fatal("listen error:", err)
 		}
 	}()
 
@@ -176,15 +195,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("shutting down server...")
+	Logger.Infof("shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("server forced to shutdown:", err)
+		Logger.Fatal("server forced to shutdown:", err)
 	}
 
-	log.Println("server exited cleanly")
+	Logger.Infof("server exited cleanly")
 
 }
