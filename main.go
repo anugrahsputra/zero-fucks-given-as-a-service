@@ -19,7 +19,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-var Logger = logging.MustGetLogger("github.com/anugrahsputra/github.com/anugrahsputra/go-rest")
+var Logger = logging.MustGetLogger("github.com/anugrahsputra/zero-fucks-given-as-a-service")
 
 func ConfigureLogger() {
 	format := logging.MustStringFormatter(
@@ -202,7 +202,7 @@ func main() {
 		Logger.Errorf("Failed to load apologies set")
 	}
 
-	r := gin.New()
+	r := gin.Default()
 	r.Use(gin.Recovery())
 
 	rl := NewRateLimiter(3, 6)
