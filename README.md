@@ -23,7 +23,7 @@ https://zfgaas.downormal.dev/sorry
 ```
 
 **Method:** `GET`  
-**Rate Limit:** `1 request per second` (Burst: 3)
+**Rate Limit:** `120 requests per minute` (2 per second, Burst: 4)
 
 ### 🔄 Example Request
 

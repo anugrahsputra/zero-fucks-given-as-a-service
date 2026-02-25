@@ -205,7 +205,7 @@ func main() {
 	r := gin.Default()
 	r.Use(gin.Recovery())
 
-	rl := NewRateLimiter(3, 6)
+	rl := NewRateLimiter(2, 4)
 
 	r.GET("/", func(c *gin.Context) {
 		// CHECK OUT MY OTHER WORK
