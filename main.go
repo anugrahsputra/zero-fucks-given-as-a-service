@@ -9,14 +9,14 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/go-redis/redis_rate/v10"
 	"github.com/op/go-logging"
-	"golang.org/x/time/rate"
+	"github.com/redis/go-redis/v9"
 )
 
 var Logger = logging.MustGetLogger("github.com/anugrahsputra/zero-fucks-given-as-a-service")
@@ -37,65 +37,41 @@ type DontCare struct {
 	Reason string `json:"reason"`
 }
 
-type RateLimiter struct {
-	limiters        map[string]*rate.Limiter
-	lastAccess      map[string]time.Time
-	mu              sync.Mutex
-	r               rate.Limit
-	burst           int
-	cleanupInterval time.Duration
-	lastCleanup     time.Time
+type RedisRateLimiter struct {
+	limiter *redis_rate.Limiter
+	limit   redis_rate.Limit
 }
 
-func NewRateLimiter(r rate.Limit, b int) *RateLimiter {
-	return &RateLimiter{
-		limiters:        make(map[string]*rate.Limiter),
-		lastAccess:      make(map[string]time.Time),
-		r:               r,
-		burst:           b,
-		cleanupInterval: 5 * time.Minute,
-		lastCleanup:     time.Now(),
+func NewRedisRateLimiter(rdb *redis.Client, rate int, burst int, period time.Duration) *RedisRateLimiter {
+	return &RedisRateLimiter{
+		limiter: redis_rate.NewLimiter(rdb),
+		limit: redis_rate.Limit{
+			Rate:   rate,
+			Burst:  burst,
+			Period: period,
+		},
 	}
 }
 
-func (rl *RateLimiter) getLimiter(key string) *rate.Limiter {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	if now.Sub(rl.lastCleanup) > rl.cleanupInterval {
-		rl.cleanup(now)
-		rl.lastCleanup = now
+func (rl *RedisRateLimiter) Middleware() gin.HandlerFunc {
+	prefix := os.Getenv("REDIS_PREFIX")
+	if prefix == "" {
+		prefix = "zfgaas"
 	}
 
-	limiter, exists := rl.limiters[key]
-	if !exists {
-		limiter = rate.NewLimiter(rl.r, rl.burst)
-		rl.limiters[key] = limiter
-	}
-
-	rl.lastAccess[key] = now
-	return limiter
-}
-
-func (rl *RateLimiter) cleanup(now time.Time) {
-	cutoff := now.Add(-rl.cleanupInterval * 2)
-	for key, last := range rl.lastAccess {
-		if last.Before(cutoff) {
-			delete(rl.limiters, key)
-			delete(rl.lastAccess, key)
-		}
-	}
-}
-
-func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := "ip:" + getClientIP(c.Request)
+		key := prefix + ":rate_limit:ip:" + getClientIP(c.Request)
 
-		limiter := rl.getLimiter(key)
-		if !limiter.Allow() {
+		res, err := rl.limiter.Allow(c, key, rl.limit)
+		if err != nil {
+			Logger.Errorf("Redis rate limit error: %v", err)
+			c.Next()
+			return
+		}
+
+		if res.Allowed == 0 {
 			Logger.Warningf("Rate limit exceeded for %s", key)
-			c.Header("Retry-After", "1")
+			c.Header("Retry-After", time.Duration(res.RetryAfter).String())
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "Too many requests, so maybe chill the fuck out",
 			})
@@ -202,10 +178,29 @@ func main() {
 		Logger.Errorf("Failed to load apologies set")
 	}
 
+	// Redis connection setup
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "redis:6379"
+	}
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+
+	// Check Redis connection
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := rdb.Ping(ctx).Result(); err != nil {
+		Logger.Errorf("Failed to connect to Redis at %s: %v", redisAddr, err)
+	} else {
+		Logger.Infof("Connected to Redis at %s", redisAddr)
+	}
+
+	rl := NewRedisRateLimiter(rdb, 2, 4, time.Second)
+
 	r := gin.Default()
 	r.Use(gin.Recovery())
-
-	rl := NewRateLimiter(2, 4)
 
 	r.GET("/", func(c *gin.Context) {
 		// CHECK OUT MY OTHER WORK
@@ -235,11 +230,15 @@ func main() {
 
 	Logger.Infof("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		Logger.Fatal("server forced to shutdown:", err)
+	}
+
+	if err := rdb.Close(); err != nil {
+		Logger.Errorf("error closing redis: %v", err)
 	}
 
 	Logger.Infof("server exited cleanly")
