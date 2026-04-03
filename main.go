@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/go-redis/redis_rate/v10"
@@ -199,8 +200,15 @@ func main() {
 
 	rl := NewRedisRateLimiter(rdb, 2, 4, time.Second)
 
-	r := gin.Default()
+	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"*"},
+		AllowHeaders:     []string{"*"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: false,
+	}))
 
 	r.GET("/", func(c *gin.Context) {
 		// CHECK OUT MY OTHER WORK
