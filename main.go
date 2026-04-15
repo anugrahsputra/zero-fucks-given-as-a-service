@@ -203,11 +203,18 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"*"},
-		AllowHeaders:     []string{"*"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET"},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Accept",
+		},
+		ExposeHeaders: []string{
+			"Content-Length",
+		},
 		AllowCredentials: false,
+		MaxAge:           12 * time.Hour,
 	}))
 
 	r.GET("/", func(c *gin.Context) {
