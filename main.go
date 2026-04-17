@@ -201,21 +201,24 @@ func main() {
 	rl := NewRedisRateLimiter(rdb, 2, 4, time.Second)
 
 	r := gin.New()
-	r.Use(gin.Recovery())
-	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{"GET"},
-		AllowHeaders: []string{
-			"Origin",
-			"Content-Type",
-			"Accept",
-		},
-		ExposeHeaders: []string{
-			"Content-Length",
-		},
-		AllowCredentials: false,
-		MaxAge:           12 * time.Hour,
-	}))
+	r.Use(
+		gin.Recovery(),
+		gin.Logger(),
+		cors.New(cors.Config{
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{"GET"},
+			AllowHeaders: []string{
+				"Origin",
+				"Content-Type",
+				"Accept",
+			},
+			ExposeHeaders: []string{
+				"Content-Length",
+			},
+			AllowCredentials: false,
+			MaxAge:           12 * time.Hour,
+		}),
+	)
 
 	r.GET("/", func(c *gin.Context) {
 		// CHECK OUT MY OTHER WORK
